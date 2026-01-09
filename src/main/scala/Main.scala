@@ -28,7 +28,7 @@ object Main extends IOWebApp {
             cls := "hidden lg:flex items-center justify-end mb-8",
             img(
               cls := "w-8 mr-2",
-              src := "./favicon.ico"
+              src := "./logo.svg"
             ),
             a(
               href := "/",

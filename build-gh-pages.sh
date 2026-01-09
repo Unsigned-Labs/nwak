@@ -19,7 +19,7 @@ git checkout "$current_branch"
 git worktree add ./gh-pages gh-pages
 cd gh-pages && mkdir -p ./target/esbuild
 cp ../index.html ./
-cp ../favicon.ico ./
+cp ../logo.svg ./
 cp ../edit.svg ./
 cp ../ext.svg ./
 cp ../target/esbuild/bundle.js ./target/esbuild
