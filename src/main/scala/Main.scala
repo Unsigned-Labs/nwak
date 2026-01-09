@@ -23,7 +23,7 @@ object Main extends IOWebApp {
         cls := "grid lg:flex grid-rows-[auto_auto] lg:flex-row w-full min-h-screen",
         // sidebar
         div(
-          cls := "order-2 lg:order-1 justify-self-end w-full lg:w-1/2 bg-white mt-6 lg:mt-0 p-6 flex flex-col border-r border-gray-200",
+          cls := "order-2 lg:order-1 justify-self-end w-full lg:w-1/2 bg-slate-900/50 mt-6 lg:mt-0 p-6 flex flex-col border-r border-slate-800",
           h1(
             cls := "hidden lg:flex items-center justify-end mb-8",
             img(
@@ -32,7 +32,7 @@ object Main extends IOWebApp {
             ),
             a(
               href := "/",
-              cls := "text-xl font-bold text-gray-900",
+              cls := "text-xl font-bold text-slate-100",
               "nostr web army knife"
             )
           ),
@@ -42,16 +42,32 @@ object Main extends IOWebApp {
           ),
           // signing preferences
           div(
-            cls := "flex gap-2 justify-end flex-wrap lg:mt-6 pt-6 border-t border-gray-200 space-y-4 text-sm text-gray-600",
+            cls := "flex gap-2 justify-end flex-wrap lg:mt-6 pt-6 border-t border-slate-800 space-y-4 text-sm text-slate-400",
             renderNip07Signer(store)
           ),
           // links at bottom
           div(
-            cls := "flex gap-2 justify-end flex-wrap lg:mt-6 pt-6 border-t border-gray-200 space-y-4 text-sm text-gray-600",
+            cls := "flex gap-2 justify-end flex-wrap items-center lg:mt-6 pt-6 border-t border-slate-800 text-sm text-slate-400",
+            span("fork of "),
+            a(
+              href := "https://nwak.nostr.technology/",
+              target := "_blank",
+              cls := "text-primary-400 hover:text-primary-300 transition-colors font-medium",
+              "fiatjaf/nwak"
+            ),
+            span(" with a sexy dark theme — "),
+            a(
+              href := "https://github.com/Unsigned-Labs/nwak",
+              target := "_blank",
+              cls := "hover:text-primary-400 transition-colors underline",
+              "our code"
+            ),
+            span(" • "),
             a(
               href := "https://github.com/fiatjaf/nwak",
-              cls := "block hover:text-gray-900",
-              "source code"
+              target := "_blank",
+              cls := "hover:text-primary-400 transition-colors underline",
+              "original"
             )
           )
         ),
@@ -59,7 +75,7 @@ object Main extends IOWebApp {
         div(
           cls := "order-1 lg-order-2 justify-self-start lg:flex lg:items-center lg:justify-center w-full",
           div(
-            cls := "bg-white w-full lg:w-[90%] lg:rounded-lg shadow-md p-4 pt-6 lg:p-12",
+            cls := "bg-slate-900 w-full lg:w-[90%] lg:rounded-2xl shadow-2xl shadow-black/50 border border-slate-800/50 p-4 pt-6 lg:p-12",
             renderInput(store),
             renderActions(store)
           )
@@ -195,7 +211,7 @@ object Main extends IOWebApp {
       cls := "w-full",
       textArea.withSelf { self =>
         (
-          cls := "w-full p-2 lg:p-4 min-h-[280px] lg:min-h-[370px] lg:min-w-[500px] font-mono rounded-lg bg-glade-green-50 border border-glade-green-200 text-gray-900",
+          cls := "w-full p-4 lg:p-5 min-h-[280px] lg:min-h-[370px] lg:min-w-[500px] font-mono text-sm rounded-xl bg-slate-800/50 border border-slate-700 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-all",
           spellCheck := false,
           placeholder := "paste something nostric (event JSON, nprofile, npub, nevent etc or hex key or id)",
           onInput --> (_.foreach(_ => self.value.get.flatMap(store.input.set))),

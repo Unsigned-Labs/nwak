@@ -368,7 +368,7 @@ object Components {
         relayReply =>
           div(
             cls := "flex items-center space-x-3",
-            span(cls := "font-bold", "submit to relay? "),
+            span(cls := "font-bold text-accent-500", "submit to relay? "),
             div(
               cls := "flex flex-wrap justify-between max-w-xl gap-2",
               renderSubmitToRelay(store,event,"ws://localhost:10547"),
@@ -461,7 +461,7 @@ object Components {
                 case url if url.isEmpty =>
                     input.withSelf { self =>
                       (
-                        cls := "w-full py-1 px-2 text-sm font-mono rounded bg-glade-green-50 border border-glade-green-200 text-gray-900",
+                        cls := "w-full py-1.5 px-3 text-sm font-mono rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-all",
                         defaultValue := "ws://localhost:10547",
                         onKeyPress --> (_.foreach(evt =>
                           evt.key match {
@@ -510,18 +510,18 @@ object Components {
   ): Resource[IO, HtmlDivElement[IO]] =
     div(
       cls := "flex items-center space-x-3",
-      span(cls := "font-bold", key + " "),
-      span(cls := "font-mono max-w-xl break-all", value),
+      span(cls := "font-bold text-slate-300", key + " "),
+      span(cls := "font-mono max-w-xl break-all text-slate-400", value),
       selectLink,
       if enable then
         Some(button(
           buttonLabel,
           Styles.buttonSmall,
           onClick --> (_.foreach{_ => fixWith})
-        )) 
+        ))
       else None,
       if(notice.nonEmpty && enable) then
-        Some(span(cls := "font-mono max-w-xl break-all", " " + notice))
+        Some(span(cls := "font-mono max-w-xl break-all text-slate-500 text-xs", " " + notice))
       else None
 
     )
@@ -533,8 +533,8 @@ object Components {
   ): Resource[IO, HtmlDivElement[IO]] =
     div(
       cls := "flex items-center space-x-3",
-      span(cls := "font-bold", key + " "),
-      span(cls := "font-mono max-w-xl break-all", value),
+      span(cls := "font-bold text-slate-300", key + " "),
+      span(cls := "font-mono max-w-xl break-all text-slate-400", value),
       selectLink
     )
 
@@ -544,8 +544,8 @@ object Components {
       code: String
   ): Resource[IO, HtmlDivElement[IO]] =
     div(
-      span(cls := "font-bold", key + " "),
-      span(cls := "font-mono break-all", code),
+      span(cls := "font-bold text-slate-300", key + " "),
+      span(cls := "font-mono break-all text-slate-400", code),
       selectable(store, code),
       a(
         href := "nostr:" + code,
@@ -563,7 +563,7 @@ object Components {
       SignallingRef[IO].of(false).toResource.flatMap { active =>
         div(
           cls := "flex items-center space-x-3",
-          span(cls := "font-bold", "relay hints "),
+          span(cls := "font-bold text-slate-300", "relay hints "),
           if relays.size == 0 then div("")
           else
             // displaying each relay hint
@@ -572,11 +572,11 @@ object Components {
               relays
                 .map(url =>
                   div(
-                    cls := "font-mono flex items-center rounded py-0.5 px-1 mr-1 mb-1 bg-orange-100",
+                    cls := "font-mono text-xs flex items-center rounded-lg py-1 px-2 mr-1 mb-1 bg-primary-900/40 border border-primary-800/50 text-primary-300",
                     url,
                     // removing a relay hint by clicking on the x
                     div(
-                      cls := "cursor-pointer ml-1 text-rose-600 hover:text-rose-300",
+                      cls := "cursor-pointer ml-2 text-red-400 hover:text-red-300 transition-colors",
                       onClick --> (_.foreach(_ => {
                         store.result.get.flatMap(result =>
                           store.input.set(
@@ -620,7 +620,7 @@ object Components {
               div(
                 input.withSelf { self =>
                   (
-                    cls := "w-full py-1 px-2 text-sm font-mono rounded bg-glade-green-50 border border-glade-green-200 text-gray-900",
+                    cls := "w-full py-1.5 px-3 text-sm font-mono rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-all",
                     onKeyPress --> (_.foreach(evt =>
                       // confirm adding a relay hint
                       evt.key match {
