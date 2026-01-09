@@ -25,10 +25,10 @@ object Main extends IOWebApp {
         div(
           cls := "order-2 lg:order-1 justify-self-end w-full lg:w-1/2 bg-slate-900/50 mt-6 lg:mt-0 p-6 flex flex-col border-r border-slate-800",
           h1(
-            cls := "hidden lg:flex items-center justify-end mb-8",
+            cls := "hidden lg:flex items-center justify-center mb-8",
             img(
               cls := "w-8 mr-2",
-              src := "./logo.svg"
+              src := "./assets/logo.svg"
             ),
             a(
               href := "/",
@@ -42,12 +42,12 @@ object Main extends IOWebApp {
           ),
           // signing preferences
           div(
-            cls := "flex gap-2 justify-end flex-wrap lg:mt-6 pt-6 border-t border-slate-800 space-y-4 text-sm text-slate-400",
+            cls := "lg:mt-6 pt-6 border-t border-slate-800",
             renderNip07Signer(store)
           ),
           // links at bottom
           div(
-            cls := "flex gap-2 justify-end flex-wrap items-center lg:mt-6 pt-6 border-t border-slate-800 text-sm text-slate-400",
+            cls := "flex gap-2 justify-center flex-wrap items-center lg:mt-6 pt-6 border-t border-slate-800 text-sm text-slate-400",
             span("fork of "),
             a(
               href := "https://nwak.nostr.technology/",
@@ -55,7 +55,7 @@ object Main extends IOWebApp {
               cls := "text-primary-400 hover:text-primary-300 transition-colors font-medium",
               "fiatjaf/nwak"
             ),
-            span(" with a sexy dark theme — "),
+            span(" with a sexier look — "),
             a(
               href := "https://github.com/Unsigned-Labs/nwak",
               target := "_blank",
@@ -85,124 +85,145 @@ object Main extends IOWebApp {
 
   def renderActions(store: Store): Resource[IO, HtmlDivElement[IO]] =
     div(
-      cls := "flex flex-wrap justify-evenly pt-4 gap-2",
-      store.input.map {
-        case "" => div("")
-        case _ =>
+      cls := "flex flex-col gap-4 pt-4",
+
+      // Toolbar for utility actions
+      div(
+        Styles.toolbar,
+        store.input.map {
+          case "" => div("")
+          case _ =>
+            button(
+              Styles.toolbarButton,
+              "Clear",
+              onClick --> (_.foreach(_ => store.input.set("")))
+            )
+        },
+        store.result.map {
+          case Right(_: Event) =>
+            button(
+              Styles.toolbarButton,
+              "Format",
+              onClick --> (_.foreach(_ =>
+                store.input.update(original =>
+                  parse(original).toOption
+                    .map(_.printWith(jsonPrinter))
+                    .getOrElse(original)
+                )
+              ))
+            )
+          case _ => div("")
+        }
+      ),
+
+      // Action cards grid
+      div(
+        cls := "flex flex-wrap gap-3 justify-center",
+
+        // Fetch card (conditional)
+        store.result.map {
+          case Right(evp: EventPointer) if evp.relays.nonEmpty =>
+            Some(
+              SignallingRef[IO].of(false).toResource.flatMap {
+                fetchIsInProgress =>
+
+                  def fetchFromRelay(rawUri: String): IO[Option[Event]] =
+                    IO.fromEither(org.http4s.Uri.fromString(rawUri))
+                      .toResource
+                      .flatMap(Relay.mkResourceForIO(_))
+                      .use { relay =>
+                        relay.lookupEventById(evp.id, timeout = 30.seconds)
+                      }
+                      .reject { case None =>
+                        new RuntimeException(
+                          s"event-not-found: ${evp.id} not found at $rawUri"
+                        )
+                      }
+
+                  val tryFetchFromEachOrNone =
+                    multiRaceAllFailOrFirstToSucceed(
+                      evp.relays.map(fetchFromRelay)
+                    )
+                      .recover(_ => None)
+
+                  def updateInput(maybeEvent: Option[Event]): IO[Unit] =
+                    maybeEvent match
+                      case Some(event) =>
+                        store.input.set(event.asJson.printWith(jsonPrinter))
+                      case None =>
+                        store.input.set(
+                          s"Tried all the given relay hints, but event ${evp.id} was not found."
+                        )
+
+                  val fetchOrUnit = fetchIsInProgress.get.flatMap {
+                    case true => IO.unit
+                    case false =>
+                      fetchIsInProgress.set(true)
+                        *> tryFetchFromEachOrNone.flatMap(updateInput)
+                        *> fetchIsInProgress.set(false)
+                  }
+                  val buttonLabel = fetchIsInProgress.map {
+                    case true  => "Fetching..."
+                    case false => "Fetch Event"
+                  }
+
+                  actionCard(
+                    "Fetch from Relay",
+                    "Retrieve the event from the provided relay hints",
+                    button(
+                      Styles.button,
+                      buttonLabel,
+                      onClick --> (_.foreach(_ => fetchOrUnit)),
+                      disabled <-- fetchIsInProgress
+                    )
+                  )
+              }
+            )
+          case _ => None
+        },
+
+        actionCard(
+          "Generate New",
+          "",
           button(
-            Styles.button,
-            "Clear",
-            onClick --> (_.foreach(_ => store.input.set("")))
-          )
-      },
-      store.result.map {
-        case Right(_: Event) =>
-          button(
-            Styles.button,
-            "Format",
+            Styles.buttonWithIcon,
+            img(cls := "w-5 h-5", src := "./assets/braces.svg"),
+            span("Generate Event"),
             onClick --> (_.foreach(_ =>
-              store.input.update(original =>
-                parse(original).toOption
-                  .map(_.printWith(jsonPrinter))
-                  .getOrElse(original)
+              Resource
+                .suspend(store.nip07signer.get)
+                .use { signer =>
+                  for
+                    pubkey <- signer.publicKey
+                    generatedEvent <- IO(
+                      Event(
+                        kind = 1,
+                        content = "hello world",
+                        pubkey = Some(pubkey),
+                        id = None
+                      )
+                    )
+                    signedEvent <- signer.isDebuggingSigner.ifM(
+                      ifTrue = signer.signEvent(generatedEvent),
+                      ifFalse = IO(generatedEvent)
+                    )
+                  yield signedEvent
+                }
+                .map(_.asJson.printWith(jsonPrinter))
+                .flatMap(store.input.set)
+            ))
+          ),
+          button(
+            Styles.buttonWithIcon,
+            img(cls := "w-5 h-5", src := "./assets/key.svg"),
+            span("Generate Keypair"),
+            onClick --> (_.foreach(_ =>
+              store.input.set(
+                NIP19.encode(PrivateKey(randomBytes32()))
               )
             ))
           )
-        case _ => div("")
-      },
-      store.result.map {
-        case Right(evp: EventPointer) if evp.relays.nonEmpty =>
-          Some(
-            SignallingRef[IO].of(false).toResource.flatMap {
-              fetchIsInProgress =>
-
-                def fetchFromRelay(rawUri: String): IO[Option[Event]] =
-                  IO.fromEither(org.http4s.Uri.fromString(rawUri))
-                    .toResource
-                    .flatMap(Relay.mkResourceForIO(_))
-                    .use { relay =>
-                      relay.lookupEventById(evp.id, timeout = 30.seconds)
-                    }
-                    .reject { case None =>
-                      new RuntimeException(
-                        s"event-not-found: ${evp.id} not found at $rawUri"
-                      )
-                    }
-
-                val tryFetchFromEachOrNone =
-                  multiRaceAllFailOrFirstToSucceed(
-                    evp.relays.map(fetchFromRelay)
-                  )
-                    .recover(_ => None)
-
-                def updateInput(maybeEvent: Option[Event]): IO[Unit] =
-                  maybeEvent match
-                    case Some(event) =>
-                      store.input.set(event.asJson.printWith(jsonPrinter))
-                    // for now we will just display a failure message in the input
-                    // textarea, but this should be made better
-                    case None =>
-                      store.input.set(
-                        s"Tried all the given relay hints, but event ${evp.id} was not found."
-                      )
-
-                val fetchOrUnit = fetchIsInProgress.get.flatMap {
-                  case true => IO.unit
-                  case false =>
-                    fetchIsInProgress.set(true)
-                      *> tryFetchFromEachOrNone.flatMap(updateInput)
-                      *> fetchIsInProgress.set(false)
-                }
-                val buttonLabel = fetchIsInProgress.map {
-                  case true  => "Fetching..."
-                  case false => "Fetch Event"
-                }
-                button(
-                  Styles.button,
-                  buttonLabel,
-                  onClick --> (_.foreach(_ => fetchOrUnit)),
-                  disabled <-- fetchIsInProgress
-                )
-            }
-          )
-        case _ => None
-      },
-      button(
-        Styles.button,
-        "Generate Event",
-        onClick --> (_.foreach(_ =>
-          Resource
-            .suspend(store.nip07signer.get)
-            .use { signer =>
-              for
-                pubkey <- signer.publicKey
-                generatedEvent <- IO(
-                  Event(
-                    kind = 1,
-                    content = "hello world",
-                    pubkey = Some(pubkey),
-                    id = None
-                  )
-                )
-                // only auto-sign the event if we are using debugging signer
-                signedEvent <- signer.isDebuggingSigner.ifM(
-                  ifTrue = signer.signEvent(generatedEvent),
-                  ifFalse = IO(generatedEvent)
-                )
-              yield signedEvent
-            }
-            .map(_.asJson.printWith(jsonPrinter))
-            .flatMap(store.input.set)
-        ))
-      ),
-      button(
-        Styles.button,
-        "Generate Keypair",
-        onClick --> (_.foreach(_ =>
-          store.input.set(
-            NIP19.encode(PrivateKey(randomBytes32()))
-          )
-        ))
+        )
       )
     )
 
@@ -225,17 +246,18 @@ object Main extends IOWebApp {
       cls := "w-full",
       store.result.map {
         case Left(msg)                  => div(msg)
-        case Right(bytes: ByteVector32) => render32Bytes(store, bytes)
-        case Right(event: Event)        => renderEvent(store, event)
-        case Right(pp: ProfilePointer)  => renderProfilePointer(store, pp)
-        case Right(evp: EventPointer)   => renderEventPointer(store, evp)
+        case Right(bytes: ByteVector32) => render32Bytes(store, bytes, window)
+        case Right(event: Event)        => renderEvent(store, event, window)
+        case Right(pp: ProfilePointer)  => renderProfilePointer(store, pp, None, window)
+        case Right(evp: EventPointer)   => renderEventPointer(store, evp, window)
         case Right(sk: PrivateKey) =>
           renderProfilePointer(
             store,
             ProfilePointer(pubkey = sk.publicKey.xonly),
-            Some(sk)
+            Some(sk),
+            window
           )
-        case Right(addr: AddressPointer) => renderAddressPointer(store, addr)
+        case Right(addr: AddressPointer) => renderAddressPointer(store, addr, window)
       }
     )
 
@@ -264,55 +286,52 @@ object Main extends IOWebApp {
             store.nip07signer: Signal[IO, Resource[IO, NIP07Signer[IO]]]
           ).mapN {
             case (true, true, signer) =>
-              div(
-                span(cls := "font-bold", "Using NIP-07 Pubkey: "),
-                span(cls := "mr-4", signer.flatMap(_.publicKeyHex.toResource)),
-                button(
-                  "Switch to Debugging Key",
-                  Styles.buttonSmall,
-                  onClick --> (_.foreach(_ =>
-                    store.nip07signer.set(NIP07.mkDebuggingSigner())
-                      *> useNip07.set(false)
-                  ))
-                )
+              signerProfileCard(
+                signerType = "NIP-07",
+                pubkeyHex = signer.flatMap(_.publicKeyHex.toResource),
+                switchButtonLabel = "Switch",
+                onSwitch = store.nip07signer.set(NIP07.mkDebuggingSigner())
+                  *> useNip07.set(false),
+                iconSrc = "./assets/puzzle.svg",
+                nip07Available = true,
+                onSwitchToNip07 = IO.unit,
+                window = window
               )
             case (true, false, signer) =>
-              div(
-                span(cls := "font-bold", "Using Debugging Pubkey: "),
-                span(cls := "mr-4", signer.flatMap(_.publicKeyHex.toResource)),
-                button(
-                  "Switch to NIP-07",
-                  Styles.buttonSmall,
-                  onClick --> (_.foreach(_ =>
-                    NIP07
-                      .mkSigner(window)
-                      // try to see if we have a public key yet
-                      .evalTap(_.publicKey.timeout(1.seconds))
-                      .attempt
-                      .map {
-                        // timeout was triggered
-                        case Left(_) => false
-                        // no error, so
-                        case Right(_) => true
-                      }
-                      .use(switchWasSuccessful =>
-                        if switchWasSuccessful then
-                          // since we are this far, we can probably safely
-                          // construct a new NIP07 signer and not need to guard
-                          // it with a timeout like above
-                          store.nip07signer.set(NIP07.mkSigner(window))
-                            *> useNip07.set(true)
-                        else
-                          // no change in signer
-                          IO.unit
-                      )
-                  ))
-                )
+              signerProfileCard(
+                signerType = "Debugging",
+                pubkeyHex = signer.flatMap(_.publicKeyHex.toResource),
+                switchButtonLabel = "Switch",
+                onSwitch = store.nip07signer.set(NIP07.mkDebuggingSigner())
+                  *> useNip07.set(false),
+                iconSrc = "./assets/bug.svg",
+                nip07Available = true,
+                onSwitchToNip07 = NIP07
+                  .mkSigner(window)
+                  .evalTap(_.publicKey.timeout(1.seconds))
+                  .attempt
+                  .map {
+                    case Left(_) => false
+                    case Right(_) => true
+                  }
+                  .use(switchWasSuccessful =>
+                    if switchWasSuccessful then
+                      store.nip07signer.set(NIP07.mkSigner(window))
+                        *> useNip07.set(true)
+                    else
+                      IO.unit
+                  ),
+                window = window
               )
             case (_, _, signer) =>
-              div(
-                span(cls := "font-bold", "Using Debugging Pubkey: "),
-                span(signer.flatMap(_.publicKeyHex.toResource))
+              signerProfileCard(
+                signerType = "Debugging",
+                pubkeyHex = signer.flatMap(_.publicKeyHex.toResource),
+                switchButtonLabel = "",
+                onSwitch = IO.unit,
+                iconSrc = "./assets/bug.svg",
+                nip07Available = false,
+                window = window
               )
           }
         )

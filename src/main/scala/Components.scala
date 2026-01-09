@@ -29,36 +29,156 @@ object Components {
       div(cls := "flex flex-col gap-2", content.toList)
     )
 
+  private def cardWithIcon(
+      title: String,
+      iconSrc: String,
+      content: Resource[IO, HtmlDivElement[IO]]*
+  ): Resource[IO, HtmlDivElement[IO]] =
+    div(
+      Styles.card,
+      div(
+        Styles.cardTitle,
+        cls := "flex items-center gap-2",
+        img(cls := "w-5 h-5", src := iconSrc),
+        span(title)
+      ),
+      div(cls := "flex flex-col gap-2", content.toList)
+    )
+
+  def truncatePubkey(hex: String, startChars: Int = 8, endChars: Int = 8): String =
+    if hex.length <= startChars + endChars then hex
+    else s"${hex.take(startChars)}...${hex.takeRight(endChars)}"
+
+  def signerProfileCard(
+      signerType: String,
+      pubkeyHex: Resource[IO, String],
+      switchButtonLabel: String,
+      onSwitch: IO[Unit],
+      iconSrc: String,
+      nip07Available: Boolean = false,
+      onSwitchToNip07: IO[Unit] = IO.unit,
+      window: Window[IO]
+  ): Resource[IO, HtmlDivElement[IO]] =
+    div(
+      Styles.card,
+      cls := "flex items-center gap-4",
+      div(
+        Styles.iconContainer,
+        img(cls := "w-6 h-6", src := iconSrc)
+      ),
+      div(
+        cls := "flex-1 min-w-0",
+        div(Styles.sectionLabel, s"$signerType Signer"),
+        pubkeyHex.flatMap(hex =>
+          div(
+            cls := "flex flex-col gap-1",
+            div(
+              cls := "flex items-center gap-2",
+              span(cls := "text-xs text-slate-500", "Hex:"),
+              button(
+                cls := "font-mono text-sm text-slate-200 hover:text-primary-400 cursor-pointer bg-transparent border-0 p-0 transition-colors",
+                truncatePubkey(hex),
+                onClick --> (_.foreach(_ => window.navigator.clipboard.writeText(hex)))
+              )
+            ),
+            div(
+              cls := "flex items-center gap-2",
+              span(cls := "text-xs text-slate-500", "Npub:"),
+              button(
+                cls := "font-mono text-sm text-slate-200 hover:text-primary-400 cursor-pointer bg-transparent border-0 p-0 transition-colors",
+                truncatePubkey(NIP19.encode(XOnlyPublicKey(ByteVector32.fromValidHex(hex)))),
+                onClick --> (_.foreach(_ =>
+                  window.navigator.clipboard.writeText(
+                    NIP19.encode(XOnlyPublicKey(ByteVector32.fromValidHex(hex)))
+                  )
+                ))
+              )
+            )
+          )
+        )
+      ),
+      if switchButtonLabel.nonEmpty && nip07Available then
+        Some(div(
+          cls := "flex-shrink-0",
+          select.withSelf { self =>
+            (
+              cls := "text-sm bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-medium px-3 py-1.5 rounded-md cursor-pointer transition-all",
+              onChange --> (_.foreach(_ =>
+                self.value.get.flatMap {
+                  case "nip07" => onSwitchToNip07
+                  case "debug" => onSwitch
+                  case _ => IO.unit
+                }
+              )),
+              if signerType == "NIP-07" then
+                List(
+                  option(value := "nip07", selected := true, "NIP-07"),
+                  option(value := "debug", "Debugging")
+                )
+              else
+                List(
+                  option(value := "debug", selected := true, "Debugging"),
+                  option(value := "nip07", "NIP-07")
+                )
+            )
+          }
+        ))
+      else if switchButtonLabel.nonEmpty then
+        Some(div(
+          cls := "flex-shrink-0",
+          button(
+            Styles.buttonSmall,
+            switchButtonLabel,
+            onClick --> (_.foreach(_ => onSwitch))
+          )
+        ))
+      else None
+    )
+
+  def actionCard(
+      title: String,
+      description: String,
+      buttons: Resource[IO, HtmlElement[IO]]*
+  ): Resource[IO, HtmlDivElement[IO]] =
+    div(
+      Styles.card,
+      div(Styles.cardTitle, title),
+      div(Styles.buttonGroup, buttons.toList),
+      if description.nonEmpty then
+        Some(div(Styles.actionDescription, description))
+      else None
+    )
+
   def render32Bytes(
       store: Store,
-      bytes32: ByteVector32
+      bytes32: ByteVector32,
+      window: Window[IO]
   ): Resource[IO, HtmlDivElement[IO]] =
     div(
       cls := "flex flex-col gap-4",
-      entry("CaNonical Hex", bytes32.toHex),
-      card(
-        "If This is a Public Key",
+      entry("Canonical Hex", bytes32.toHex),
+      cardWithIcon(
+        "If This is a public key",
+        "./assets/unlock.svg",
         div(
           cls := "flex flex-col gap-2",
-          entry(
+          nip19_21(
+            store,
             "npub",
             NIP19.encode(XOnlyPublicKey(bytes32)),
-            Some(
-              selectable(
-                store,
-                NIP19.encode(XOnlyPublicKey(bytes32))
-              )
-            )
+            window
           ),
           nip19_21(
             store,
             "nprofile",
-            NIP19.encode(ProfilePointer(XOnlyPublicKey(bytes32)))
+            NIP19.encode(ProfilePointer(XOnlyPublicKey(bytes32))),
+            window
           )
         )
       ),
-      card(
-        "If This is a Private Key",
+      cardWithIcon(
+        "If This is a private key",
+        "./assets/lock.svg",
         div(
           cls := "flex flex-col gap-2",
           (store.nip07signer: Signal[IO,Resource[IO,NIP07Signer[IO]]]).map{ signer =>
@@ -82,31 +202,30 @@ object Components {
                 )
             }
           },
-          entry(
+          nip19_21(
+            store,
             "npub",
             NIP19.encode(PrivateKey(bytes32).publicKey.xonly),
-            Some(
-              selectable(
-                store,
-                NIP19.encode(PrivateKey(bytes32).publicKey.xonly)
-              )
-            )
+            window
           ),
           nip19_21(
             store,
             "nprofile",
-            NIP19.encode(ProfilePointer(PrivateKey(bytes32).publicKey.xonly))
+            NIP19.encode(ProfilePointer(PrivateKey(bytes32).publicKey.xonly)),
+            window
           )
         )
       ),
-      card(
-        "If This is an Event ID",
+      cardWithIcon(
+        "If this is an event ID",
+        "./assets/braces.svg",
         div(
           cls := "flex flex-col gap-2",
           nip19_21(
             store,
             "nevent",
-            NIP19.encode(EventPointer(bytes32.toHex))
+            NIP19.encode(EventPointer(bytes32.toHex)),
+            window
           )
         )
       )
@@ -114,7 +233,8 @@ object Components {
 
   def renderEventPointer(
       store: Store,
-      evp: snow.EventPointer
+      evp: snow.EventPointer,
+      window: Window[IO]
   ): Resource[IO, HtmlDivElement[IO]] =
     div(
       cls := "text-md flex flex-col gap-2",
@@ -130,13 +250,14 @@ object Components {
       evp.kind.map { kind =>
         entry("Kind", kind.toString)
       },
-      nip19_21(store, "nevent", NIP19.encode(evp)),
+      nip19_21(store, "nevent", NIP19.encode(evp), window),
     )
 
   def renderProfilePointer(
       store: Store,
       pp: snow.ProfilePointer,
-      sk: Option[PrivateKey] = None
+      sk: Option[PrivateKey] = None,
+      window: Window[IO]
   ): Resource[IO, HtmlDivElement[IO]] =
     div(
       cls := "text-md flex flex-col gap-2",
@@ -150,7 +271,7 @@ object Components {
       sk.map { k =>
         (store.nip07signer: Signal[IO,Resource[IO,NIP07Signer[IO]]]).map{ signer =>
           signer.use(_.publicKey).map(_ == k.publicKey.xonly).toResource.flatMap{
-            alreadyUsingThisPubkey => 
+            alreadyUsingThisPubkey =>
               fixableEntry(
                 "nsec",
                 NIP19.encode(k),
@@ -179,12 +300,13 @@ object Components {
         NIP19.encode(pp.pubkey),
         Some(selectable(store, NIP19.encode(pp.pubkey)))
       ),
-      nip19_21(store, "nprofile", NIP19.encode(pp))
+      nip19_21(store, "nprofile", NIP19.encode(pp), window)
     )
 
   def renderAddressPointer(
       store: Store,
-      addr: snow.AddressPointer
+      addr: snow.AddressPointer,
+      window: Window[IO]
   ): Resource[IO, HtmlDivElement[IO]] = {
     val nip33atag =
       s"${addr.kind}:${addr.author.value.toHex}:${addr.d}"
@@ -195,14 +317,15 @@ object Components {
       entry("Identifier (d tag)", addr.d),
       entry("Kind", addr.kind.toString),
       relayHints(store, addr.relays),
-      nip19_21(store, "naddr", NIP19.encode(addr)),
+      nip19_21(store, "naddr", NIP19.encode(addr), window),
       entry("NIP-33 'a' Tag", nip33atag, Some(selectable(store, nip33atag)))
     )
   }
 
   def renderEvent(
       store: Store,
-      event: Event
+      event: Event,
+      window: Window[IO]
   ): Resource[IO, HtmlDivElement[IO]] =
     div(
       cls := "text-md flex flex-col gap-2",
@@ -362,7 +485,8 @@ object Components {
                   author = author,
                   relays = List.empty
                 )
-              )
+              ),
+              window
             )
           )
       else
@@ -370,7 +494,8 @@ object Components {
           nip19_21(
             store,
             "nevent",
-            NIP19.encode(EventPointer(id, author = event.pubkey, kind = Some(event.kind)))
+            NIP19.encode(EventPointer(id, author = event.pubkey, kind = Some(event.kind))),
+            window
           )
         )
     )
@@ -525,21 +650,26 @@ object Components {
     enable: Boolean = true // whether to actually dispay the fix stuff
   ): Resource[IO, HtmlDivElement[IO]] =
     div(
-      cls := "flex items-center space-x-3",
-      span(cls := "font-bold text-slate-300", key + " "),
-      span(cls := "font-moNo max-w-xl break-all text-slate-400", value),
-      selectLink,
+      cls := "flex flex-col gap-2",
+      div(
+        cls := "flex items-center space-x-3",
+        span(cls := "font-bold text-slate-300", key + " "),
+        span(cls := "font-moNo max-w-xl break-all text-slate-400", value),
+        selectLink
+      ),
       if enable then
-        Some(button(
-          buttonLabel,
-          Styles.buttonSmall,
-          onClick --> (_.foreach{_ => fixWith})
+        Some(div(
+          cls := "flex flex-col gap-1 pl-0",
+          button(
+            buttonLabel,
+            Styles.buttonSmall,
+            onClick --> (_.foreach{_ => fixWith})
+          ),
+          if(notice.nonEmpty) then
+            Some(span(cls := "font-moNo max-w-xl break-all text-slate-500 text-xs", notice))
+          else None
         ))
-      else None,
-      if(notice.nonEmpty && enable) then
-        Some(span(cls := "font-moNo max-w-xl break-all text-slate-500 text-xs", " " + notice))
       else None
-
     )
 
   private def entry(
@@ -557,11 +687,19 @@ object Components {
   private def nip19_21(
       store: Store,
       key: String,
-      code: String
+      code: String,
+      window: Window[IO]
   ): Resource[IO, HtmlDivElement[IO]] =
     div(
       span(cls := "font-bold text-slate-300", key + " "),
       span(cls := "font-moNo break-all text-slate-400", code),
+      button(
+        cls := "inline cursor-pointer bg-transparent border-0 p-0",
+        onClick --> (_.foreach(_ =>
+          window.navigator.clipboard.writeText(code)
+        )),
+        copyIcon
+      ),
       selectable(store, code),
       a(
         href := "Nostr:" + code,
@@ -715,6 +853,7 @@ object Components {
       )
     )
 
-  private val edit = img(cls := "inline w-4 ml-2", src := "./edit.svg")
-  private val external = img(cls := "inline w-4 ml-2", src := "./ext.svg")
+  private val copyIcon = img(cls := "inline w-4 ml-2", src := "./assets/copy.svg")
+  private val edit = img(cls := "inline w-4 ml-2", src := "./assets/edit.svg")
+  private val external = img(cls := "inline w-4 ml-2", src := "./assets/ext.svg")
 }
