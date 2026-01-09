@@ -19,35 +19,48 @@ import org.http4s.syntax.literals.uri
 import Utils.*
 
 object Components {
+  private def card(
+      title: String,
+      content: Resource[IO, HtmlDivElement[IO]]*
+  ): Resource[IO, HtmlDivElement[IO]] =
+    div(
+      Styles.card,
+      div(Styles.cardTitle, title),
+      div(cls := "flex flex-col gap-2", content.toList)
+    )
+
   def render32Bytes(
       store: Store,
       bytes32: ByteVector32
   ): Resource[IO, HtmlDivElement[IO]] =
     div(
-      cls := "flex flex-col gap-2",
-      entry("canonical hex", bytes32.toHex),
-      "if this is a public key:",
-      div(
-        cls := "mt-2 pl-2 mb-2",
-        entry(
-          "npub",
-          NIP19.encode(XOnlyPublicKey(bytes32)),
-          Some(
-            selectable(
-              store,
-              NIP19.encode(XOnlyPublicKey(bytes32))
+      cls := "flex flex-col gap-4",
+      entry("CaNonical Hex", bytes32.toHex),
+      card(
+        "If This is a Public Key",
+        div(
+          cls := "flex flex-col gap-2",
+          entry(
+            "npub",
+            NIP19.encode(XOnlyPublicKey(bytes32)),
+            Some(
+              selectable(
+                store,
+                NIP19.encode(XOnlyPublicKey(bytes32))
+              )
             )
+          ),
+          nip19_21(
+            store,
+            "nprofile",
+            NIP19.encode(ProfilePointer(XOnlyPublicKey(bytes32)))
           )
-        ),
-        nip19_21(
-          store,
-          "nprofile",
-          NIP19.encode(ProfilePointer(XOnlyPublicKey(bytes32)))
         )
       ),
-      "if this is a private key:",
-      div(
-        cls := "pl-2 mb-2",
+      card(
+        "If This is a Private Key",
+        div(
+          cls := "flex flex-col gap-2",
           (store.nip07signer: Signal[IO,Resource[IO,NIP07Signer[IO]]]).map{ signer =>
             signer.use(_.publicKey).map(_ == PrivateKey(bytes32).publicKey.xonly)
             .toResource.flatMap{ alreadyUsingThisPubkey =>
@@ -58,7 +71,7 @@ object Components {
                     IO(PrivateKey(bytes32))
                     .map(NIP07.mkDebuggingSigner).flatMap(store.nip07signer.set)
                   ),
-                  buttonLabel = "use as debugging key",
+                  buttonLabel = "Use as Debugging Key",
                   selectLink = Some(
                     selectable(
                       store,
@@ -69,31 +82,34 @@ object Components {
                 )
             }
           },
-        entry(
-          "npub",
-          NIP19.encode(PrivateKey(bytes32).publicKey.xonly),
-          Some(
-            selectable(
-              store,
-              NIP19.encode(PrivateKey(bytes32).publicKey.xonly)
+          entry(
+            "npub",
+            NIP19.encode(PrivateKey(bytes32).publicKey.xonly),
+            Some(
+              selectable(
+                store,
+                NIP19.encode(PrivateKey(bytes32).publicKey.xonly)
+              )
             )
+          ),
+          nip19_21(
+            store,
+            "nprofile",
+            NIP19.encode(ProfilePointer(PrivateKey(bytes32).publicKey.xonly))
           )
-        ),
-        nip19_21(
-          store,
-          "nprofile",
-          NIP19.encode(ProfilePointer(PrivateKey(bytes32).publicKey.xonly))
         )
       ),
-      "if this is an event id:",
-      div(
-        cls := "pl-2 mb-2",
-        nip19_21(
-          store,
-          "nevent",
-          NIP19.encode(EventPointer(bytes32.toHex))
+      card(
+        "If This is an Event ID",
+        div(
+          cls := "flex flex-col gap-2",
+          nip19_21(
+            store,
+            "nevent",
+            NIP19.encode(EventPointer(bytes32.toHex))
+          )
         )
-      ),
+      )
     )
 
   def renderEventPointer(
@@ -103,16 +119,16 @@ object Components {
     div(
       cls := "text-md flex flex-col gap-2",
       entry(
-        "event id (hex)",
+        "Event ID (Hex)",
         evp.id,
         Some(selectable(store, evp.id))
       ),
       relayHints(store, evp.relays),
       evp.author.map { pk =>
-        entry("author (pubkey hex)", pk.value.toHex)
+        entry("Author (Pubkey Hex)", pk.value.toHex)
       },
       evp.kind.map { kind =>
-        entry("kind", kind.toString)
+        entry("Kind", kind.toString)
       },
       nip19_21(store, "nevent", NIP19.encode(evp)),
     )
@@ -126,7 +142,7 @@ object Components {
       cls := "text-md flex flex-col gap-2",
       sk.map { k =>
         entry(
-          "private key (hex)",
+          "Private Key (Hex)",
           k.value.toHex,
           Some(selectable(store, k.value.toHex))
         )
@@ -141,7 +157,7 @@ object Components {
                 fixWith = (
                   IO(NIP07.mkDebuggingSigner(k)).flatMap(store.nip07signer.set)
                 ),
-                buttonLabel = "use as debugging key",
+                buttonLabel = "Use as Debugging Key",
                 selectLink = Some(selectable(store, NIP19.encode(k))),
                 enable = !alreadyUsingThisPubkey
               )
@@ -149,7 +165,7 @@ object Components {
         }
       },
       entry(
-        "public key (hex)",
+        "Public Key (Hex)",
         pp.pubkey.value.toHex,
         Some(selectable(store, pp.pubkey.value.toHex))
       ),
@@ -175,12 +191,12 @@ object Components {
 
     div(
       cls := "text-md flex flex-col gap-2",
-      entry("author (pubkey hex)", addr.author.value.toHex),
-      entry("identifier (d tag)", addr.d),
-      entry("kind", addr.kind.toString),
+      entry("Author (Pubkey Hex)", addr.author.value.toHex),
+      entry("Identifier (d tag)", addr.d),
+      entry("Kind", addr.kind.toString),
       relayHints(store, addr.relays),
       nip19_21(store, "naddr", NIP19.encode(addr)),
-      entry("nip33 'a' tag", nip33atag, Some(selectable(store, nip33atag)))
+      entry("NIP-33 'a' Tag", nip33atag, Some(selectable(store, nip33atag)))
     )
   }
 
@@ -197,10 +213,10 @@ object Components {
         Some(
           div(
             cls := "flex items-center",
-            entry("missing", "pubkey"),
+            entry("Missing", "Pubkey"),
             button(
               Styles.buttonSmall,
-              "fill with a debugging key",
+              "Fill with a Debugging Key",
               onClick --> (_.foreach { _ =>
                 store.input.set(
                   event
@@ -217,12 +233,12 @@ object Components {
         Some(
           div(
             cls := "flex items-center",
-            entry("missing", "id"),
+            entry("Missing", "ID"),
             if event.pubkey.isDefined then
               Some(
                 button(
                   Styles.buttonSmall,
-                  "fill id",
+                  "Fill ID",
                   onClick --> (_.foreach(_ =>
                     store.input.set(
                       event
@@ -241,7 +257,7 @@ object Components {
         Some(
           div(
             cls := "flex items-center",
-            entry("missing", "sig"),
+            entry("Missing", "Signature"),
             if event.id.isDefined && event.pubkey == Some(
                 keyOne.publicKey.xonly
               )
@@ -249,7 +265,7 @@ object Components {
               Some(
                 button(
                   Styles.buttonSmall,
-                  "sign",
+                  "Sign",
                   onClick --> (_.foreach(_ =>
                     store.nip07signer.get.flatMap(_.use { signer =>
                       for
@@ -271,16 +287,16 @@ object Components {
           )
         )
       else None,
-      entry("serialized event", event.serialized),
-      entry("implied event id", event.hash.toHex),
+      entry("Serialized Event", event.serialized),
+      entry("Implied Event ID", event.hash.toHex),
       event.id == Some(event.hash.toHex) match {
         case true => entry(
-          "implied event id matches given event id?",
-          "yes"
+          "Implied Event ID Matches Given Event ID?",
+          "Yes"
         )
         case false => fixableEntry(
-          "implied event id matches given event id?",
-          "no",
+          "Implied Event ID Matches Given Event ID?",
+          "No",
           fixWith = store.input.set(
             event
               .copy(id = Some(event.hash.toHex))
@@ -291,14 +307,14 @@ object Components {
       },
       event.isValid match {
         case true => entry(
-          "is signature valid?",
-          "yes"
+          "Is Signature Valid?",
+          "Yes"
         )
         case false => fixableEntry(
-          "is signature valid?",
-          "no",
-          buttonLabel = "sign and fix",
-          notice = "note: fixing will update pubkey, id, and signature",
+          "Is Signature Valid?",
+          "No",
+          buttonLabel = "Sign and Fix",
+          notice = "Note: Fixing will update pubkey, ID, and signature",
           fixWith = store.nip07signer.get.flatMap(_.use { signer =>
             for
               pubkey <- signer.publicKey
@@ -314,15 +330,15 @@ object Components {
           })
         )
       },
-      // ensure timetsamp is reasonable (before Jan 1, 3000), offer to fix if not
+      // ensure timetsamp is reasonable (before Jan 1, 3000), offer to fix if Not
       (event.created_at >= 0L && event.created_at <= 32_503_680_000L) match
-        case true => None // no need to show anything
+        case true => None // No need to show anything
         case false => Some(
           fixableEntry(
-            "is timestamp valid?",
-            "no",
-            buttonLabel = "fix with current time",
-            notice = "note: fixing will update id",
+            "Is Timestamp Valid?",
+            "No",
+            buttonLabel = "Fix with Current Time",
+            notice = "Note: Fixing will update ID",
             fixWith = store.input.set(
               event
                 .copy(created_at = new java.util.Date().getTime() / 1000)
@@ -368,7 +384,7 @@ object Components {
         relayReply =>
           div(
             cls := "flex items-center space-x-3",
-            span(cls := "font-bold text-accent-500", "submit to relay? "),
+            span(cls := "font-bold text-accent-500", "Submit to Relay? "),
             div(
               cls := "flex flex-wrap justify-between max-w-xl gap-2",
               renderSubmitToRelay(store,event,"ws://localhost:10547"),
@@ -378,7 +394,7 @@ object Components {
           )
       }
     else
-      div("invalid event; cannot yet submit to relay")
+      div("Invalid event; canNot yet submit to relay")
 
   def renderSubmitToRelay(
     store: Store,
@@ -401,7 +417,7 @@ object Components {
               <* (awaitingReply.set(false))
             ).recoverWith{
               case e: java.io.IOException =>
-                relayReply.set(Some(Messages.FromRelay.OK("",false,"websocket connection error")))
+                relayReply.set(Some(Messages.FromRelay.OK("",false,"Websocket connection error")))
                 *> awaitingReply.set(false)
             }
 
@@ -411,7 +427,7 @@ object Components {
             case Some(Messages.FromRelay.OK(_,accepted,_))
               if accepted => s"$initialRelayUri - \u2705"
             case Some(Messages.FromRelay.OK(_,accepted,message))
-              if !accepted => s"$initialRelayUri - FAIL - $message"
+              if !accepted => s"$initialRelayUri - Failed - $message"
             case _ => s"$initialRelayUri"
           }
           case true => relayReply.map(_ => s"$initialRelayUri - ...")
@@ -439,7 +455,7 @@ object Components {
                 )
               )
             case true =>
-              renderInputCustomRelay(store,validEvent, initialButtonLabel = "websocket connection error")
+              renderInputCustomRelay(store,validEvent, initialButtonLabel = "Websocket Connection Error")
           }
         )
     }
@@ -447,7 +463,7 @@ object Components {
   def renderInputCustomRelay(
     store: Store,
     validEvent: Event,
-    initialButtonLabel: String = "custom relay"
+    initialButtonLabel: String = "Custom Relay"
   ): Resource[IO, HtmlDivElement[IO]] = (
     SignallingRef[IO].of(false).toResource,
     SignallingRef[IO].of("").toResource
@@ -461,7 +477,7 @@ object Components {
                 case url if url.isEmpty =>
                     input.withSelf { self =>
                       (
-                        cls := "w-full py-1.5 px-3 text-sm font-mono rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-all",
+                        cls := "w-full py-1.5 px-3 text-sm font-moNo rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder:text-slate-500 focus:outline-None focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-all",
                         defaultValue := "ws://localhost:10547",
                         onKeyPress --> (_.foreach(evt =>
                           evt.key match {
@@ -511,7 +527,7 @@ object Components {
     div(
       cls := "flex items-center space-x-3",
       span(cls := "font-bold text-slate-300", key + " "),
-      span(cls := "font-mono max-w-xl break-all text-slate-400", value),
+      span(cls := "font-moNo max-w-xl break-all text-slate-400", value),
       selectLink,
       if enable then
         Some(button(
@@ -521,7 +537,7 @@ object Components {
         ))
       else None,
       if(notice.nonEmpty && enable) then
-        Some(span(cls := "font-mono max-w-xl break-all text-slate-500 text-xs", " " + notice))
+        Some(span(cls := "font-moNo max-w-xl break-all text-slate-500 text-xs", " " + notice))
       else None
 
     )
@@ -534,7 +550,7 @@ object Components {
     div(
       cls := "flex items-center space-x-3",
       span(cls := "font-bold text-slate-300", key + " "),
-      span(cls := "font-mono max-w-xl break-all text-slate-400", value),
+      span(cls := "font-moNo max-w-xl break-all text-slate-400", value),
       selectLink
     )
 
@@ -545,10 +561,10 @@ object Components {
   ): Resource[IO, HtmlDivElement[IO]] =
     div(
       span(cls := "font-bold text-slate-300", key + " "),
-      span(cls := "font-mono break-all text-slate-400", code),
+      span(cls := "font-moNo break-all text-slate-400", code),
       selectable(store, code),
       a(
-        href := "nostr:" + code,
+        href := "Nostr:" + code,
         external
       )
     )
@@ -563,7 +579,7 @@ object Components {
       SignallingRef[IO].of(false).toResource.flatMap { active =>
         div(
           cls := "flex items-center space-x-3",
-          span(cls := "font-bold text-slate-300", "relay hints "),
+          span(cls := "font-bold text-slate-300", "Relay Hints "),
           if relays.size == 0 then div("")
           else
             // displaying each relay hint
@@ -572,7 +588,7 @@ object Components {
               relays
                 .map(url =>
                   div(
-                    cls := "font-mono text-xs flex items-center rounded-lg py-1 px-2 mr-1 mb-1 bg-primary-900/40 border border-primary-800/50 text-primary-300",
+                    cls := "font-moNo text-xs flex items-center rounded-lg py-1 px-2 mr-1 mb-1 bg-primary-900/40 border border-primary-800/50 text-primary-300",
                     url,
                     // removing a relay hint by clicking on the x
                     div(
@@ -620,7 +636,7 @@ object Components {
               div(
                 input.withSelf { self =>
                   (
-                    cls := "w-full py-1.5 px-3 text-sm font-mono rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-all",
+                    cls := "w-full py-1.5 px-3 text-sm font-moNo rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder:text-slate-500 focus:outline-None focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-all",
                     onKeyPress --> (_.foreach(evt =>
                       // confirm adding a relay hint
                       evt.key match {
@@ -672,7 +688,7 @@ object Components {
               // button to add a new relay hint
               button(
                 Styles.buttonSmall,
-                "add relay hint",
+                "Add Relay Hint",
                 onClick --> (_.foreach(_ => active.set(true)))
               )
             case false => div("")

@@ -33,7 +33,7 @@ object Main extends IOWebApp {
             a(
               href := "/",
               cls := "text-xl font-bold text-slate-100",
-              "nostr web army knife"
+              "Nostr Web Army Knife"
             )
           ),
           div(
@@ -91,7 +91,7 @@ object Main extends IOWebApp {
         case _ =>
           button(
             Styles.button,
-            "clear",
+            "Clear",
             onClick --> (_.foreach(_ => store.input.set("")))
           )
       },
@@ -99,7 +99,7 @@ object Main extends IOWebApp {
         case Right(_: Event) =>
           button(
             Styles.button,
-            "format",
+            "Format",
             onClick --> (_.foreach(_ =>
               store.input.update(original =>
                 parse(original).toOption
@@ -143,7 +143,7 @@ object Main extends IOWebApp {
                     // textarea, but this should be made better
                     case None =>
                       store.input.set(
-                        s"tried all the given relay hints, but event ${evp.id} was not found."
+                        s"Tried all the given relay hints, but event ${evp.id} was not found."
                       )
 
                 val fetchOrUnit = fetchIsInProgress.get.flatMap {
@@ -154,8 +154,8 @@ object Main extends IOWebApp {
                       *> fetchIsInProgress.set(false)
                 }
                 val buttonLabel = fetchIsInProgress.map {
-                  case true  => "fetching ..."
-                  case false => "fetch event"
+                  case true  => "Fetching..."
+                  case false => "Fetch Event"
                 }
                 button(
                   Styles.button,
@@ -169,7 +169,7 @@ object Main extends IOWebApp {
       },
       button(
         Styles.button,
-        "generate event",
+        "Generate Event",
         onClick --> (_.foreach(_ =>
           Resource
             .suspend(store.nip07signer.get)
@@ -197,7 +197,7 @@ object Main extends IOWebApp {
       ),
       button(
         Styles.button,
-        "generate keypair",
+        "Generate Keypair",
         onClick --> (_.foreach(_ =>
           store.input.set(
             NIP19.encode(PrivateKey(randomBytes32()))
@@ -213,7 +213,7 @@ object Main extends IOWebApp {
         (
           cls := "w-full p-4 lg:p-5 min-h-[280px] lg:min-h-[370px] lg:min-w-[500px] font-mono text-sm rounded-xl bg-slate-800/50 border border-slate-700 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-all",
           spellCheck := false,
-          placeholder := "paste something nostric (event JSON, nprofile, npub, nevent etc or hex key or id)",
+          placeholder := "Paste something nostric (event JSON, nprofile, npub, nevent etc or hex key or id)",
           onInput --> (_.foreach(_ => self.value.get.flatMap(store.input.set))),
           value <-- store.input
         )
@@ -265,10 +265,10 @@ object Main extends IOWebApp {
           ).mapN {
             case (true, true, signer) =>
               div(
-                span(cls := "font-bold", "using NIP07 pubkey: "),
+                span(cls := "font-bold", "Using NIP-07 Pubkey: "),
                 span(cls := "mr-4", signer.flatMap(_.publicKeyHex.toResource)),
                 button(
-                  "switch to debugging key",
+                  "Switch to Debugging Key",
                   Styles.buttonSmall,
                   onClick --> (_.foreach(_ =>
                     store.nip07signer.set(NIP07.mkDebuggingSigner())
@@ -278,10 +278,10 @@ object Main extends IOWebApp {
               )
             case (true, false, signer) =>
               div(
-                span(cls := "font-bold", "using debugging pubkey: "),
+                span(cls := "font-bold", "Using Debugging Pubkey: "),
                 span(cls := "mr-4", signer.flatMap(_.publicKeyHex.toResource)),
                 button(
-                  "switch to NIP-07",
+                  "Switch to NIP-07",
                   Styles.buttonSmall,
                   onClick --> (_.foreach(_ =>
                     NIP07
@@ -311,7 +311,7 @@ object Main extends IOWebApp {
               )
             case (_, _, signer) =>
               div(
-                span(cls := "font-bold", "using debugging pubkey: "),
+                span(cls := "font-bold", "Using Debugging Pubkey: "),
                 span(signer.flatMap(_.publicKeyHex.toResource))
               )
           }
